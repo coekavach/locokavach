@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Locomotive Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        #chart {
+            width: 100%;
+            height: 400px;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <h1>Locomotive Dashboard</h1>
+    <div class="controls">
+        <input type="text" id="filter" placeholder="Filter data...">
+        <select id="groupBy">
+            <option value="Zone">Group by Zone</option>
+            <option value="Make">Group by Make</option>
+            <option value="Shed">Group by Shed</option>
+            <option value="Type">Group by Type</option>
+        </select>
+    </div>
+    <div id="chart"></div>
+    <table id="dataTable">
+        <thead>
+            <tr>
+                <th>Zone</th>
+                <th>Loco Number</th>
+                <th>Make</th>
+                <th>Shed</th>
+                <th>Type</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        let data = [];
+
+        // Function to load and parse CSV data
+        function loadData() {
+            Papa.parse('locomotive_data.csv', {
+                download: true,
+                header: true,
+                complete: function(results) {
+                    data = results.data;
+                    updateDashboard();
+                }
+            });
+        }
+
+        // Function to filter data
+        function filterData() {
+            const filterValue = document.getElementById('filter').value.toLowerCase();
+            return data.filter(item => 
+                Object.values(item).some(value => 
+                    value.toLowerCase().includes(filterValue)
+                )
+            );
+        }
+
+        // Function to group data
+        function groupData(data) {
+            const groupBy = document.getElementById('groupBy').value;
+            const groups = {};
+            data.forEach(item => {
+                const key = item[groupBy];
+                if (!groups[key]) {
+                    groups[key] = 0;
+                }
+                groups[key]++;
+            });
+            return Object.entries(groups).map(([key, value]) => ({ name: key, count: value }));
+        }
+
+        // Function to update the chart
+        function updateChart(data) {
+            const margin = {top: 20, right: 20, bottom: 30, left: 40};
+            const width = 1000 - margin.left - margin.right;
+            const height = 400 - margin.top - margin.bottom;
+
+            d3.select("#chart").html("");
+
+            const svg = d3.select("#chart")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const x = d3.scaleBand()
+                .range([0, width])
+                .padding(0.1);
+
+            const y = d3.scaleLinear()
+                .range([height, 0]);
+
+            x.domain(data.map(d => d.name));
+            y.domain([0, d3.max(data, d => d.count)]);
+
+            svg.selectAll(".bar")
+                .data(data)
+                .enter().append("rect")
+                .attr("class", "bar")
+                .attr("x", d => x(d.name))
+                .attr("width", x.bandwidth())
+                .attr("y", d => y(d.count))
+                .attr("height", d => height - y(d.count))
+                .attr("fill", "steelblue");
+
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x))
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .attr("dx", "-.8em")
+                .attr("dy", ".15em")
+                .attr("transform", "rotate(-45)");
+
+            svg.append("g")
+                .call(d3.axisLeft(y));
+        }
+
+        // Function to update the table
+        function updateTable(data) {
+            const tbody = document.querySelector("#dataTable tbody");
+            tbody.innerHTML = "";
+            data.slice(0, 10).forEach(item => {
+                const row = tbody.insertRow();
+                row.insertCell().textContent = item.Zone;
+                row.insertCell().textContent = item.LocoNumber;
+                row.insertCell().textContent = item.Make;
+                row.insertCell().textContent = item.Shed;
+                row.insertCell().textContent = item.Type;
+            });
+        }
+
+        // Function to update the entire dashboard
+        function updateDashboard() {
+            const filteredData = filterData();
+            const groupedData = groupData(filteredData);
+            updateChart(groupedData);
+            updateTable(filteredData);
+        }
+
+        // Event listeners
+        document.getElementById('filter').addEventListener('input', updateDashboard);
+        document.getElementById('groupBy').addEventListener('change', updateDashboard);
+
+        // Load data when the page loads
+        loadData();
+    </script>
+</body>
+</html>
